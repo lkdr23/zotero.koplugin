@@ -37,10 +37,11 @@ describe("Zotero item cache sync", function()
         return lfs.attributes(api.zotero_dir .. "/" .. name .. ".json", "ino")
     end
 
-    local function itemsDelta(body)
-        env:deletedRoute("1301")
-        fake:on("GET", "/items%?", { headers = { ["total-results"] = "1", ["last-modified-version"] = "1301" }, body = body })
-        fake:on("GET", "/collections%?", { headers = { ["total-results"] = "0", ["last-modified-version"] = "1301" }, body = "[]" })
+    local function itemsDelta(body, version)
+        version = version or "1301"
+        env:deletedRoute(version)
+        fake:on("GET", "/items%?", { headers = { ["total-results"] = "1", ["last-modified-version"] = version }, body = body })
+        fake:on("GET", "/collections%?", { headers = { ["total-results"] = "0", ["last-modified-version"] = version }, body = "[]" })
     end
 
     local function addAnnotation(key)
@@ -72,7 +73,7 @@ describe("Zotero item cache sync", function()
                 meta = { creatorSummary = "Vaswani et al.", parsedDate = "2017" },
                 data = { itemType = "journalArticle", title = "Attention Is All You Need", date = "2017",
                     dateAdded = "2024-01-05T10:00:00Z",
-                    DOI = "10.5555/3295222", collections = { "COLLAAA1" }, tags = {} } }, items.PARENT01)
+                    DOI = "10.5555/3295222", read_status = "to_read", collections = { "COLLAAA1" }, tags = {} } }, items.PARENT01)
             assert.same({ key = "ATTACH01", version = 1201, data = {
                 itemType = "attachment", parentItem = "PARENT01", linkMode = "imported_file", title = "Full Text PDF",
                 contentType = "application/pdf", filename = "Vaswani et al. - 2017 - Attention Is All You Need.pdf",
@@ -135,6 +136,40 @@ describe("Zotero item cache sync", function()
         end)
     end)
 
+    it("moves attachments on a parent-only status delta and ignores ambiguous or unsupported statuses", function()
+        env:fullSyncRoutes()
+        assert.is_nil(api.syncAllItems())
+        assert.equal("ATTACH01", api.displayReadingStatus("to_read")[1].key)
+
+        local function updateStatus(version, extra)
+            local since = api.getLibraryVersion()
+            freshServer()
+            itemsDelta(api.util.encode({ { key = "PARENT01", version = version, data = {
+                itemType = "journalArticle", title = "Attention Is All You Need", extra = extra,
+            } } }), tostring(version))
+            assert.is_nil(api.syncAllItems())
+            assert.truthy(fake:urls()[1]:find("since=" .. since .. "&", 1, true))
+            assert.same({}, api.displayReadingStatus("to_read"))
+        end
+
+        updateStatus(1301, "Note: unrelated\r\nrEaD_sTaTuS: \tIn Progress  \r\nRead_Status_Date: 2024-01-05")
+        assert.equal("ATTACH01", api.displayReadingStatus("in_progress")[1].key)
+        assert.is_nil(api.getItems().PARENT01.data.extra)
+
+        local ignored = {
+            "Read_Status: In Progress\nRead_Status: To Read",
+            "Read_Status: In Progress Later",
+            "Read_Status_Date: To Read\nNote: Read_Status: To Read",
+            "",
+        }
+        for i, extra in ipairs(ignored) do
+            updateStatus(1301 + i, extra)
+            assert.same({}, api.displayReadingStatus("in_progress"))
+        end
+        updateStatus(1306, nil)
+        assert.same({}, api.displayReadingStatus("in_progress"))
+    end)
+
     -- #4: a meta.lua restored without items.json and collections.json kept its library
     -- version, so every later delta skipped the collections the caches had held.
     describe("missing caches", function()
@@ -174,9 +209,9 @@ describe("Zotero item cache sync", function()
         before_each(function()
             env:library()
             local items = api.getItems()
-            for _, item in pairs(items) do item.data.dateAdded = nil end
+            items.PARENT01.data.extra = nil
             api.setItems(items)
-            api.getSettings():delSetting("cache_schema")
+            api.getSettings():saveSetting("cache_schema", 1)
             api.setLibraryVersion("1214")
             api.saveModifiedItems()
         end)
@@ -186,8 +221,8 @@ describe("Zotero item cache sync", function()
             assert.is_nil(api.syncAllItems())
             assert.truthy(fake:urls()[1]:find("since=0&", 1, true))
             api = reloadedAPI()
-            assert.equal("2024-01-05T10:00:00Z", api.getItems().PARENT01.data.dateAdded)
-            assert.equal(1, api.getSettings():readSetting("cache_schema"))
+            assert.equal("ATTACH01", api.displayReadingStatus("to_read")[1].key)
+            assert.equal(2, api.getSettings():readSetting("cache_schema"))
             freshServer()
             emptyDeltaRoutes()
             assert.is_nil(api.syncAllItems())
@@ -200,7 +235,7 @@ describe("Zotero item cache sync", function()
             assert.is_not_nil(api.syncAllItems())
             assert.equal(items, cacheInode("items"))
             assert.equal(collections, cacheInode("collections"))
-            assert.is_nil(reloadedAPI().getSettings():readSetting("cache_schema"))
+            assert.equal(1, reloadedAPI().getSettings():readSetting("cache_schema"))
             assert.equal("1214", api.getLibraryVersion())
             freshServer()
             env:fullSyncRoutes()
@@ -215,8 +250,8 @@ describe("Zotero item cache sync", function()
             assert.is_not_nil(api.syncAllItems())
             assert.equal(items, cacheInode("items"))
             assert.equal(collections, cacheInode("collections"))
-            assert.is_nil(reloadedAPI().getSettings():readSetting("cache_schema"))
-            assert.is_nil(api.getItems().PARENT01.data.dateAdded)
+            assert.equal(1, reloadedAPI().getSettings():readSetting("cache_schema"))
+            assert.same({}, api.displayReadingStatus("to_read"))
         end)
 
         it("does not mark a discarded stage as upgraded", function()
@@ -225,8 +260,8 @@ describe("Zotero item cache sync", function()
             local result = api.stageLibrary(false, stage)
             assert.is_nil(result.error)
             api.discardSyncStage(stage)
-            assert.is_nil(reloadedAPI().getSettings():readSetting("cache_schema"))
-            assert.is_nil(api.getItems().PARENT01.data.dateAdded)
+            assert.equal(1, reloadedAPI().getSettings():readSetting("cache_schema"))
+            assert.same({}, api.displayReadingStatus("to_read"))
         end)
 
         it("upgrades empty libraries only once and resets the marker on account change", function()

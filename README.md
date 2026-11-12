@@ -23,6 +23,7 @@
 | **Search** | Titles, first authors and DOIs, with an optional tag filter |
 | **Download on demand** | One tap per paper, or a whole collection at once. Zotero storage or WebDAV |
 | **Read offline** | Downloaded files open without Wi-Fi or credentials. *On device* lists them |
+| **Reading lists** | To Read and In Progress show PDF and EPUB attachments by Zotero Reading List status |
 | **Continue reading** | Jump back into the last document, and return to where you were in the library |
 | **Zotero notes** | Read a paper's notes from the last sync, offline |
 | **Highlight sync** | Two-way PDF and EPUB highlights, with offline edits and conflict review *(opt-in)* |
@@ -54,6 +55,8 @@ Everything is under **Zotero → Settings**.
 | Sync on startup / on browse | Automatic sync when already online. Off by default |
 | Sync highlights | Two-way annotation sync. Needs write access. |
 | Share reading position | Shares the PDF page or EPUB location with Zotero |
+
+**Reading lists:** Set statuses in [Zotero Reading List](https://github.com/Dominic-DallOsto/zotero-reading-list), sync Zotero desktop, then choose **Zotero → Synchronize** on KOReader. The first sync after upgrading fetches the full library once to populate the lists. Both views use the active tag filter and are available offline from the cached metadata.
 
 **Tips:** hold a collection to download all of it, and hold a paper to read its notes.
 

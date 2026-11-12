@@ -1,4 +1,6 @@
 -- Shared LuaLS annotations. This file contains no runtime state.
+---@alias ZoteroReadingStatus 'to_read'|'in_progress'
+
 ---@class ZoteroItem
 ---@field key string
 ---@field version number
@@ -18,7 +20,7 @@
 ---@field collection boolean|nil
 ---@field downloaded boolean|nil
 ---@field on_device boolean|nil
----@field destination 'collection'|'all'|'device'|nil
+---@field destination 'collection'|'all'|'device'|ZoteroReadingStatus|nil
 ---@field continue_reading boolean|nil
 ---@field search boolean|nil
 ---@field subtitle string|nil
@@ -29,7 +31,7 @@
 ---@field title string
 
 ---@class ZoteroBrowserView
----@field kind 'home'|'all'|'collection'|'search'|'device'
+---@field kind 'home'|'all'|'collection'|'search'|'device'|ZoteroReadingStatus
 ---@field key string|nil
 ---@field query string|nil
 ---@field page integer|nil
@@ -40,6 +42,7 @@
 
 ---@class ZoteroIndex
 ---@field by_collection table<string, ZoteroRow[]>
+---@field by_read_status table<ZoteroReadingStatus, ZoteroRow[]>
 ---@field searchable ZoteroRow[]
 
 ---@class ZoteroDownloadSummary

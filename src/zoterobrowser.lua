@@ -5,6 +5,8 @@ local Header = require("src.zoteroheader")
 local Screen = require("device").screen
 local _ = require("gettext")
 
+local READING_STATUS_TITLES = { to_read = _("To Read"), in_progress = _("In Progress") }
+
 local Browser = Menu:extend{
     no_title = false, is_borderless = true, is_popout = false,
     covers_full_screen = true,
@@ -113,6 +115,7 @@ function Browser:refresh()
     if view.kind == "all" then self:displayAllItems(view.page) return end
     if view.kind == "search" then self:displaySearchResults(view.query, view.page) return end
     if view.kind == "device" then self:displayOnDevice(view.query, view.page) return end
+    if READING_STATUS_TITLES[view.kind] then self:displayReadingStatus(view.kind, view.page) return end
     self:displayCollection(view.key, view.page)
 end
 
@@ -128,6 +131,8 @@ function Browser:displayHome(page)
         { text = _("All items"), destination = "all" },
         { text = _("On device"), destination = "device" },
         { text = _("Search"), search = true },
+        { text = READING_STATUS_TITLES.to_read, destination = "to_read" },
+        { text = READING_STATUS_TITLES.in_progress, destination = "in_progress" },
     }, _("No Items"))
 end
 
@@ -136,6 +141,14 @@ end
 function Browser:displayAllItems(page)
     self.current_view = { kind = "all", page = page or 1 }
     self:setItems(self.api.displaySearchResults(""), _("No Items"))
+end
+
+--- Browse the cached attachments for a reading status. Example: browser:displayReadingStatus("to_read").
+---@param status ZoteroReadingStatus
+---@param page integer|nil
+function Browser:displayReadingStatus(status, page)
+    self.current_view = { kind = status, page = page or 1 }
+    self:setItems(self.api.displayReadingStatus(status), _("No files match this reading status and the active filters."))
 end
 
 --- Reopen the last view for the selected library. Example: browser:restoreLibrary().
@@ -208,6 +221,7 @@ function Browser:locationTitle()
     local view = self.current_view
     if view.kind == "home" then return _("Zotero home") end
     if view.kind == "all" then return _("Zotero - All items") end
+    if READING_STATUS_TITLES[view.kind] then return _("Zotero - ") .. READING_STATUS_TITLES[view.kind] end
     if view.kind == "search" then return _("Zotero - Search: ") .. view.query end
     if view.kind == "device" then
         return _("Zotero - On device") .. (view.query ~= "" and (": " .. view.query) or "")

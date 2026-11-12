@@ -11,7 +11,7 @@ local function copyView(view)
         result.query = type(view.query) == "string" and view.query or ""
     elseif view.kind == "collection" then
         result.key = type(view.key) == "string" and view.key or nil
-    elseif view.kind ~= "home" and view.kind ~= "all" then
+    elseif view.kind ~= "home" and view.kind ~= "all" and view.kind ~= "to_read" and view.kind ~= "in_progress" then
         result.kind = "home"
     end
     return result

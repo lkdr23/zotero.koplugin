@@ -30,14 +30,41 @@ describe("Zotero everyday navigation", function()
         PluginLoader.loaded_plugins = loaded_plugins
     end)
 
-    it("opens home with all five destinations through the existing gesture event", function()
+    it("opens home with all destinations through the existing gesture event", function()
         plugin:onZoteroOpenAction()
         assert.equals("home", browser.current_view.kind)
-        assert.same({ "Continue reading", "Collections", "All items", "On device", "Search" }, Env.texts(browser.item_table))
+        assert.same({ "Continue reading", "Collections", "All items", "On device", "Search", "To Read", "In Progress" },
+            Env.texts(browser.item_table))
         assert.is_false(browser.item_table[1].enabled)
         browser:onMenuSelect(browser.item_table[1])
         assert.is_nil(runtime.opened_path)
         assert.equals(plugin.zotero_dialog, runtime:last())
+        assert.equals(0, env.http:callCount())
+    end)
+
+    it("browses and restores reading lists offline using the active tag filter", function()
+        local items = api.getItems()
+        items.PARENT01.data.read_status = "to_read"
+        items.PARENT02.data.read_status = "in_progress"
+        items.PARENT01.data.tags = { { tag = "queue" } }
+        api.setItems(items)
+        local path = env:file("ATTACH01")
+
+        browser:onMenuSelect(browser.item_table[6])
+        assert.equals("Zotero - To Read", browser:locationTitle())
+        assert.equals("ATTACH01", browser.item_table[1].key)
+        browser:onMenuSelect(browser.item_table[1])
+        assert.equals(path, runtime.opened_path)
+        browser:restoreLibrary()
+        assert.equals("to_read", browser.current_view.kind)
+        browser:onReturn()
+        browser:onMenuSelect(browser.item_table[7])
+        assert.equals("Zotero - In Progress", browser:locationTitle())
+        assert.equals("ATTACH02", browser.item_table[1].key)
+        api.setFilterTag("queue")
+        browser:refresh()
+        assert.is_true(browser.item_table[1].is_label)
+        assert.equals(1, #api.displayReadingStatus("to_read"))
         assert.equals(0, env.http:callCount())
     end)
 

@@ -1,7 +1,7 @@
 local Sync = {}
 
 -- Bump when newly cached fields need a full backfill for unchanged server items (#5).
-local CACHE_SCHEMA = 1
+local CACHE_SCHEMA = 2
 
 --- Choose the version that cannot skip intervening changes. Example: API.earlierVersion("12", "13").
 ---@param api ZoteroAPI
@@ -22,7 +22,7 @@ local CACHED_FIELDS = {
     -- nameOfAct, caseName and subject hold the title of statutes, cases and emails.
     data = { itemType = true, title = true, nameOfAct = true, caseName = true, subject = true, parentItem = true,
         collections = true, tags = true, DOI = true, date = true, dateAdded = true, contentType = true, linkMode = true,
-        filename = true, md5 = true, note = true, deleted = true },
+        filename = true, md5 = true, note = true, deleted = true, read_status = true },
 }
 
 ---@param fields table|nil
@@ -55,14 +55,37 @@ local function pickFields(fields, allowed)
     return next(kept) and kept or nil
 end
 
+local READING_LIST_STATUSES = { ["To Read"] = "to_read", ["In Progress"] = "in_progress" }
+
+-- Zotero Reading List accepts exactly one Read_Status line, with a
+-- case-insensitive field name and a trimmed, case-sensitive status name.
+---@param extra string|nil
+---@return ZoteroReadingStatus|nil
+local function readingStatus(extra)
+    if type(extra) ~= "string" then return end
+    local status
+    for line in extra:gmatch("[^\r\n]+") do
+        local field, value = line:match("^([%a_]+):(.+)$")
+        if field and field:lower() == "read_status" then
+            if status then return end
+            status = value:match("^%s*(.-)%s*$")
+        end
+    end
+    return READING_LIST_STATUSES[status]
+end
+
 -- Highlight sync fetches annotations per attachment, so the library cache never needs them.
 ---@param item ZoteroItem
 ---@return ZoteroItem|nil
 local function compactItem(item)
     if item.data and item.data.itemType == "annotation" then return nil end
     if isCompact(item) then return item end
+    local fields = pickFields(item.data, CACHED_FIELDS.data)
+    if fields and item.data.extra ~= nil then
+        fields.read_status = readingStatus(item.data.extra)
+    end
     return { key = item.key, version = item.version,
-        meta = pickFields(item.meta, CACHED_FIELDS.meta), data = pickFields(item.data, CACHED_FIELDS.data) }
+        meta = pickFields(item.meta, CACHED_FIELDS.meta), data = fields }
 end
 
 ---@param entry ZoteroItem

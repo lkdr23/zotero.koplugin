@@ -112,6 +112,8 @@ local function indexAttachment(index, key, item, parent)
     if parent or not item.data.parentItem then
         fileUnder(index.by_collection, owner.data.collections, row)
     end
+    local status_rows = index.by_read_status[owner.data.read_status]
+    if status_rows then table.insert(status_rows, row) end
     -- Only search includes the DOI in matching and ordering. Orphans use their own title.
     local doi = parent and parent.data.DOI
     if doi and doi ~= "" then title = title .. " - " .. doi end
@@ -151,7 +153,7 @@ end
 ---@return ZoteroIndex
 local function buildIndex(api)
     local items = api.getItems()
-    local index = { by_collection = {}, searchable = {} }
+    local index = { by_collection = {}, by_read_status = { to_read = {}, in_progress = {} }, searchable = {} }
     for key, item in pairs(items) do
         local parent = item.data and items[item.data.parentItem]
         if parent and not parent.data then parent = nil end
@@ -161,6 +163,7 @@ local function buildIndex(api)
     end
     local compare = itemComparator(api.getSortOrder())
     for _, entries in pairs(index.by_collection) do table.sort(entries, compare) end
+    for _, entries in pairs(index.by_read_status) do table.sort(entries, compare) end
     table.sort(index.searchable, compare)
     return index
 end
@@ -215,6 +218,18 @@ function Index.displayCollection(api, key)
     if not key then return result end
     -- Hand back copies because the browser inserts its own rows and adds presentation fields.
     for _, entry in ipairs(api.getIndex().by_collection[key] or {}) do
+        table.insert(result, displayRow(entry))
+    end
+    return result
+end
+
+--- List cached attachments for a Zotero Reading List status. Example: API.displayReadingStatus("to_read").
+---@param api ZoteroAPI
+---@param status ZoteroReadingStatus
+---@return ZoteroRow[]
+function Index.displayReadingStatus(api, status)
+    local result = {}
+    for _, entry in ipairs(api.getIndex().by_read_status[status] or {}) do
         table.insert(result, displayRow(entry))
     end
     return result
